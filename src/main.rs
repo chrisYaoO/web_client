@@ -13,8 +13,6 @@ struct Cli {
     #[structopt(short)]
     data: Option<String>,
 
-    // #[structopt(long, parse(try_from_str = parse_json))]
-    // json: Option<Value>,
     #[structopt(long)]
     json: Option<String>,
 
@@ -22,6 +20,7 @@ struct Cli {
     method: Option<reqwest::Method>,
 }
 
+// handle url errors
 fn parse_url(url: &str) -> &str {
     let parsed = Url::parse(url);
     match parsed {
@@ -47,7 +46,8 @@ fn parse_url(url: &str) -> &str {
     }
 }
 
-pub fn pretty_sorted_json(input: &str) -> Result<String, Box<dyn Error>> {
+// sorted keys json format output
+fn pretty_sorted_json(input: &str) -> Result<String, Box<dyn Error>> {
     let Ok(mut v) = serde_json::from_str::<Value>(input) else {
         println!("\nResponse body:");
         return Ok(input.to_string());
@@ -60,6 +60,7 @@ pub fn pretty_sorted_json(input: &str) -> Result<String, Box<dyn Error>> {
     Ok(out)
 }
 
+// http body get
 async fn body_get(url: &str) -> Result<String, reqwest::Error> {
     let body = reqwest::get(url).await?;
     let body = body.error_for_status()?;
@@ -67,6 +68,7 @@ async fn body_get(url: &str) -> Result<String, reqwest::Error> {
     Ok(body)
 }
 
+// get function
 async fn http_get(url: &str) {
     println!("Requesting URL: {url}");
     println!("Method: GET");
@@ -97,6 +99,7 @@ async fn http_get(url: &str) {
     }
 }
 
+// post function
 async fn http_post(args: &Cli) {
     println!("Requesting URL: {}", args.url);
     println!("Method: POST");
@@ -143,6 +146,7 @@ async fn http_post(args: &Cli) {
     }
 }
 
+// http body post
 async fn body_post(args: &Cli, send_data: String) -> Result<String, reqwest::Error> {
     let client = reqwest::Client::new();
     let mut rb = client.post(args.url.as_str());
