@@ -1,7 +1,7 @@
 use reqwest::header::CONTENT_TYPE;
-use serde_hjson;
-use serde_json::{self, Map, Value, de};
+use serde_json::{self, Value};
 use std::error::Error;
+use std::io::{self, Write};
 use structopt::StructOpt;
 use url::ParseError;
 use url::Url;
@@ -13,21 +13,19 @@ struct Cli {
     #[structopt(short)]
     data: Option<String>,
 
-    #[structopt(long, parse(try_from_str = parse_json))]
-    json: Option<Value>,
+    // #[structopt(long, parse(try_from_str = parse_json))]
+    // json: Option<Value>,
+    #[structopt(long)]
+    json: Option<String>,
 
     #[structopt(short = "X")]
     method: Option<reqwest::Method>,
 }
 
-fn parse_json(s: &str) -> Result<Value, String> {
-    serde_json::from_str(s).map_err(|e| e.to_string())
-}
-
 fn parse_url(url: &str) -> &str {
     let parsed = Url::parse(url);
     match parsed {
-        Ok(url) => "",
+        Ok(_) => "",
         Err(e) => {
             match e {
                 //invalid base
@@ -49,22 +47,28 @@ fn parse_url(url: &str) -> &str {
     }
 }
 
+pub fn pretty_sorted_json(input: &str) -> Result<String, Box<dyn Error>> {
+    let Ok(mut v) = serde_json::from_str::<Value>(input) else {
+        println!("\nResponse body:");
+        return Ok(input.to_string());
+    };
+
+    v.sort_all_objects();
+
+    let out = serde_json::to_string_pretty(&v)?;
+    println!("\nResponse body (JSON with sorted keys):");
+    Ok(out)
+}
+
 async fn body_get(url: &str) -> Result<String, reqwest::Error> {
     let body = reqwest::get(url).await?;
     let body = body.error_for_status()?;
     let body = body.text().await?;
     Ok(body)
-    // match body {
-    //     Ok(body) => match body.error_for_status() {
-    //         Ok(body) => body.text().await,
-    //         Err(e) => Err(e),
-    //     },
-    //     Err(e) => Err(e),
-    // }
 }
 
 async fn http_get(url: &str) {
-    println!("Requesting Url: {url}");
+    println!("Requesting URL: {url}");
     println!("Method: GET");
 
     let err_msg = parse_url(url);
@@ -76,7 +80,7 @@ async fn http_get(url: &str) {
     let body = body_get(url).await;
     match body {
         Ok(body) => {
-            print!("Response body:\n{}", body);
+            println!("Response body:\n{}", body);
         }
         Err(e) => {
             print!("Error: ");
@@ -93,37 +97,19 @@ async fn http_get(url: &str) {
     }
 }
 
-pub fn pretty_sorted_json(input: &str) -> Result<String, Box<dyn Error>> {
-    let Ok(mut v) = serde_json::from_str::<Value>(input) else {
-        println!("Response body:");
-        return Ok(input.to_string());
-    };
-
-    v.sort_all_objects();
-
-    let out = serde_json::to_string_pretty(&v)?;
-    println!("Response body (JSON with sorted keys):");
-    Ok(out)
-}
-
-fn json_sorted_pretty(v: &Value) -> String {
-    // 按键排序 + pretty
-    let mut buf = Vec::new();
-    let fmt = serde_json::ser::PrettyFormatter::with_indent(b"  ");
-    let mut ser = serde_json::Serializer::with_formatter(&mut buf, fmt);
-    String::from_utf8(buf).unwrap()
-}
-
 async fn http_post(args: &Cli) {
-    println!("Requesting Url: {}", args.url);
+    println!("Requesting URL: {}", args.url);
     println!("Method: POST");
-    let mut send_data = String::new();
+    let send_data: String;
     if args.json.is_some() {
-
-        println!("Response body (JSON with sorted keys):\n");
+        send_data = args.json.clone().unwrap();
+        print!("JSON: {send_data}");
+        io::stdout().flush().ok();
+        let _v: Value =
+            serde_json::from_str(args.json.clone().unwrap().as_str()).expect("Invalid JSON");
     } else {
         send_data = args.data.clone().unwrap();
-        println!("Data:{}", send_data);
+        print!("Data: {send_data}");
     };
 
     let err_msg = parse_url(&args.url);
@@ -175,7 +161,7 @@ async fn body_post(args: &Cli, send_data: String) -> Result<String, reqwest::Err
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Cli::from_args();
-    println!("{:?}", args);
+    // println!("{:?}", args);
 
     if args.json.is_some() || (args.data.is_some() && args.method.is_some()) {
         http_post(&args).await;
